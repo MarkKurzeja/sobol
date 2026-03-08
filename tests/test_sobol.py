@@ -83,15 +83,56 @@ def test_normal_symmetry():
     assert abs(result["z"].mean() - 50) < 0.5
 
 
+def test_cat_with_list():
+    """Uniform categorical from a list."""
+    result = sobol.df(8, sobol.cat("color", ["red", "green", "blue"]))
+    assert result.shape == (8, 1)
+    assert set(result["color"].unique()).issubset({"red", "green", "blue"})
+
+
+def test_cat_with_dict():
+    """Weighted categorical from a dict."""
+    result = sobol.df(64, sobol.cat("color", {"red": 0.5, "green": 0.2, "blue": 0.3}))
+    assert set(result["color"].unique()).issubset({"red", "green", "blue"})
+    # Red should appear most often with weight 0.5
+    counts = result["color"].value_counts()
+    assert counts["red"] >= counts["green"]
+    assert counts["red"] >= counts["blue"]
+
+
+def test_cat_with_set():
+    """Uniform categorical from a set."""
+    result = sobol.df(16, sobol.cat("fruit", {"apple", "banana"}))
+    assert set(result["fruit"].unique()).issubset({"apple", "banana"})
+
+
+def test_cat_deterministic():
+    a = sobol.df(16, sobol.cat("x", ["a", "b", "c"]))
+    b = sobol.df(16, sobol.cat("x", ["a", "b", "c"]))
+    pd.testing.assert_frame_equal(a, b)
+
+
+def test_cat_weights_must_sum_to_one():
+    with pytest.raises(ValueError, match="[Ss]um"):
+        sobol.cat("x", {"a": 0.3, "b": 0.3})
+
+
+def test_cat_empty_rejected():
+    with pytest.raises(ValueError, match="[Ee]mpty"):
+        sobol.cat("x", [])
+
+
 def test_mixed_dimensions():
-    """All three dimension types work together."""
+    """All dimension types work together."""
     result = sobol.df(
         16,
         sobol.uniform("a", 0, 1),
         sobol.log("b", 1, 100),
         sobol.normal("c", mean=0, std=1),
+        sobol.cat("d", ["x", "y"]),
     )
-    assert result.shape == (16, 3)
-    assert list(result.columns) == ["a", "b", "c"]
+    assert result.shape == (16, 4)
+    assert list(result.columns) == ["a", "b", "c", "d"]
     assert result["a"].between(0, 1).all()
     assert result["b"].between(1, 100).all()
+    assert set(result["d"].unique()).issubset({"x", "y"})
