@@ -2,24 +2,45 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel, model_validator
 from scipy.stats import norm, qmc
 
 
-@dataclass(frozen=True)
-class Dimension:
+class Dimension(BaseModel, frozen=True):
     name: str
-    kind: Literal["uniform", "log", "normal", "cat"]
+    kind: Literal["uniform", "log", "normal", "choice"]
     lower: float | None = None
     upper: float | None = None
     mean: float | None = None
     std: float | None = None
-    categories: tuple[str, ...] = field(default_factory=tuple)
-    weights: tuple[float, ...] = field(default_factory=tuple)
+    categories: tuple[str, ...] = ()
+    weights: tuple[float, ...] = ()
+
+    @model_validator(mode="after")
+    def _validate(self) -> Dimension:
+        if self.kind == "uniform":
+            if self.lower is None or self.upper is None:
+                raise ValueError("uniform dimension requires lower and upper")
+        elif self.kind == "log":
+            if self.lower is None or self.upper is None:
+                raise ValueError("log dimension requires lower and upper")
+            if self.lower <= 0:
+                raise ValueError(
+                    f"lower bound must be positive for log dimension, got {self.lower}"
+                )
+        elif self.kind == "normal":
+            if self.mean is None or self.std is None:
+                raise ValueError("normal dimension requires mean and std")
+        elif self.kind == "choice":
+            if len(self.categories) == 0:
+                raise ValueError("Categories must not be empty")
+            if len(self.weights) != len(self.categories):
+                raise ValueError("weights and categories must have the same length")
+        return self
 
     def transform(self, samples: np.ndarray) -> np.ndarray | list:
         if self.kind == "uniform":
@@ -32,7 +53,7 @@ class Dimension:
             # Clamp to avoid -inf/inf at the boundaries of the Sobol sequence
             clamped = np.clip(samples, 1e-10, 1 - 1e-10)
             return norm.ppf(clamped, loc=self.mean, scale=self.std)
-        elif self.kind == "cat":
+        elif self.kind == "choice":
             # Map [0, 1) samples to categories using cumulative weights
             cumulative = np.cumsum(self.weights)
             indices = np.searchsorted(cumulative, samples, side="right")
@@ -46,8 +67,6 @@ def uniform(name: str, lower: float = 0, upper: float = 1) -> Dimension:
 
 
 def log(name: str, lower: float = 0, upper: float = 1) -> Dimension:
-    if lower <= 0:
-        raise ValueError(f"lower bound must be positive for log dimension, got {lower}")
     return Dimension(name=name, kind="log", lower=lower, upper=upper)
 
 
@@ -55,22 +74,21 @@ def normal(name: str, mean: float = 0, std: float = 1) -> Dimension:
     return Dimension(name=name, kind="normal", mean=mean, std=std)
 
 
-def cat(name: str, categories: list | set | dict) -> Dimension:
+def choice(name: str, categories: list | set | dict) -> Dimension:
     if isinstance(categories, dict):
         cats = tuple(categories.keys())
-        weights = tuple(categories.values())
-        if abs(sum(weights) - 1.0) > 1e-6:
-            raise ValueError(f"Weights must sum to 1.0, got {sum(weights)}")
+        raw_weights = tuple(categories.values())
     else:
         cats = tuple(categories)
-        if len(cats) == 0:
-            raise ValueError("Categories must not be empty")
-        weights = tuple(1.0 / len(cats) for _ in cats)
+        raw_weights = tuple(1.0 for _ in cats)
 
     if len(cats) == 0:
         raise ValueError("Categories must not be empty")
 
-    return Dimension(name=name, kind="cat", categories=cats, weights=weights)
+    total = sum(raw_weights)
+    weights = tuple(w / total for w in raw_weights)
+
+    return Dimension(name=name, kind="choice", categories=cats, weights=weights)
 
 
 def df(n: int, *dimensions: Dimension) -> pd.DataFrame:
