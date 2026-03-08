@@ -12,7 +12,7 @@ from scipy.stats import norm, qmc
 
 
 class Dimension(BaseModel, frozen=True):
-    name: str
+    name: str = ""
     kind: Literal["uniform", "log", "normal", "choice", "integer", "boolean"]
     lower: float | None = None
     upper: float | None = None
@@ -77,19 +77,19 @@ class Dimension(BaseModel, frozen=True):
         raise ValueError(f"Unknown kind: {self.kind}")
 
 
-def uniform(name: str, lower: float = 0, upper: float = 1) -> Dimension:
-    return Dimension(name=name, kind="uniform", lower=lower, upper=upper)
+def uniform(lower: float = 0, upper: float = 1) -> Dimension:
+    return Dimension(kind="uniform", lower=lower, upper=upper)
 
 
-def log(name: str, lower: float = 0, upper: float = 1) -> Dimension:
-    return Dimension(name=name, kind="log", lower=lower, upper=upper)
+def log(lower: float = 0, upper: float = 1) -> Dimension:
+    return Dimension(kind="log", lower=lower, upper=upper)
 
 
-def normal(name: str, mean: float = 0, std: float = 1) -> Dimension:
-    return Dimension(name=name, kind="normal", mean=mean, std=std)
+def normal(mean: float = 0, std: float = 1) -> Dimension:
+    return Dimension(kind="normal", mean=mean, std=std)
 
 
-def choice(name: str, categories: list | set | dict) -> Dimension:
+def choice(categories: list | set | dict) -> Dimension:
     if isinstance(categories, dict):
         cats = tuple(categories.keys())
         raw_weights = tuple(categories.values())
@@ -103,15 +103,27 @@ def choice(name: str, categories: list | set | dict) -> Dimension:
     total = sum(raw_weights)
     weights = tuple(w / total for w in raw_weights)
 
-    return Dimension(name=name, kind="choice", categories=cats, weights=weights)
+    return Dimension(kind="choice", categories=cats, weights=weights)
 
 
-def integer(name: str, lower: int, upper: int) -> Dimension:
-    return Dimension(name=name, kind="integer", lower=float(lower), upper=float(upper))
+def integer(lower: int, upper: int) -> Dimension:
+    return Dimension(kind="integer", lower=float(lower), upper=float(upper))
 
 
-def boolean(name: str) -> Dimension:
-    return Dimension(name=name, kind="boolean")
+def boolean() -> Dimension:
+    return Dimension(kind="boolean")
+
+
+def _resolve_dimensions(
+    positional: tuple[Dimension, ...], kwargs: dict[str, Dimension]
+) -> tuple[Dimension, ...]:
+    """Merge positional dimensions with keyword dimensions."""
+    dims = list(positional)
+    for name, dim in kwargs.items():
+        if not isinstance(dim, Dimension):
+            raise TypeError(f"Expected a Dimension for {name!r}, got {type(dim).__name__}")
+        dims.append(dim.model_copy(update={"name": name}))
+    return tuple(dims)
 
 
 def rows(
@@ -119,13 +131,15 @@ def rows(
     *dimensions: Dimension,
     offset: int = 0,
     where: Callable[[pd.Series], bool] | None = None,
+    **kwargs: Dimension,
 ) -> Generator[dict, None, None]:
-    result = df(n, *dimensions, offset=offset, where=where)
+    result = sample(n, *dimensions, offset=offset, where=where, **kwargs)
     for _, row in result.iterrows():
         yield row.to_dict()
 
 
-def grid(*dimensions: Dimension) -> pd.DataFrame:
+def grid(*dimensions: Dimension, **kwargs: Dimension) -> pd.DataFrame:
+    dimensions = _resolve_dimensions(dimensions, kwargs)
     names = [d.name for d in dimensions]
     if len(names) != len(set(names)):
         raise ValueError(f"Duplicate dimension names: {names}")
@@ -148,12 +162,14 @@ def grid(*dimensions: Dimension) -> pd.DataFrame:
     return pd.DataFrame(rows_list, columns=names)
 
 
-def df(
+def sample(
     n: int,
     *dimensions: Dimension,
     offset: int = 0,
     where: Callable[[pd.Series], bool] | None = None,
+    **kwargs: Dimension,
 ) -> pd.DataFrame:
+    dimensions = _resolve_dimensions(dimensions, kwargs)
     if n <= 0 or (n & (n - 1)) != 0:
         raise ValueError(f"n must be a positive power of 2, got {n}")
 
@@ -210,3 +226,7 @@ def df(
                 f"Could not find {n} samples satisfying the constraint"
             )
         return result
+
+
+# Backwards compatibility alias
+df = sample
