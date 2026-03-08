@@ -57,10 +57,8 @@ def test_deterministic():
 
 
 def test_duplicate_names_rejected():
-    # Can't have duplicate kwargs in Python, so test with positional+kwarg collision
-    dim_x = sobol.Dimension(name="x", kind="uniform", lower=0, upper=1)
-    with pytest.raises(ValueError, match="[Dd]uplicate"):
-        sobol.sample(4, dim_x, x=sobol.uniform(0, 1))
+    # Python kwargs naturally prevent duplicate names, so this is implicitly enforced
+    pass
 
 
 def test_log_lower_must_be_positive():
@@ -259,9 +257,8 @@ def test_grid_rejects_continuous():
 
 
 def test_grid_duplicate_names():
-    dim_x = sobol.Dimension(name="x", kind="boolean")
-    with pytest.raises(ValueError, match="[Dd]uplicate"):
-        sobol.grid(dim_x, x=sobol.boolean())
+    # Python kwargs naturally prevent duplicate names, so this is implicitly enforced
+    pass
 
 
 def test_mixed_dimensions():

@@ -114,11 +114,9 @@ def boolean() -> Dimension:
     return Dimension(kind="boolean")
 
 
-def _resolve_dimensions(
-    positional: tuple[Dimension, ...], kwargs: dict[str, Dimension]
-) -> tuple[Dimension, ...]:
-    """Merge positional dimensions with keyword dimensions."""
-    dims = list(positional)
+def _resolve_dimensions(kwargs: dict[str, Dimension]) -> tuple[Dimension, ...]:
+    """Convert keyword arguments to a tuple of named Dimensions."""
+    dims = []
     for name, dim in kwargs.items():
         if not isinstance(dim, Dimension):
             raise TypeError(f"Expected a Dimension for {name!r}, got {type(dim).__name__}")
@@ -128,21 +126,19 @@ def _resolve_dimensions(
 
 def rows(
     n: int,
-    *dimensions: Dimension,
+    *,
     offset: int = 0,
     where: Callable[[pd.Series], bool] | None = None,
     **kwargs: Dimension,
 ) -> Generator[dict, None, None]:
-    result = sample(n, *dimensions, offset=offset, where=where, **kwargs)
+    result = sample(n, offset=offset, where=where, **kwargs)
     for _, row in result.iterrows():
         yield row.to_dict()
 
 
-def grid(*dimensions: Dimension, **kwargs: Dimension) -> pd.DataFrame:
-    dimensions = _resolve_dimensions(dimensions, kwargs)
+def grid(**kwargs: Dimension) -> pd.DataFrame:
+    dimensions = _resolve_dimensions(kwargs)
     names = [d.name for d in dimensions]
-    if len(names) != len(set(names)):
-        raise ValueError(f"Duplicate dimension names: {names}")
 
     value_lists = []
     for dim in dimensions:
@@ -164,12 +160,12 @@ def grid(*dimensions: Dimension, **kwargs: Dimension) -> pd.DataFrame:
 
 def sample(
     n: int,
-    *dimensions: Dimension,
+    *,
     offset: int = 0,
     where: Callable[[pd.Series], bool] | None = None,
     **kwargs: Dimension,
 ) -> pd.DataFrame:
-    dimensions = _resolve_dimensions(dimensions, kwargs)
+    dimensions = _resolve_dimensions(kwargs)
     if n <= 0 or (n & (n - 1)) != 0:
         raise ValueError(f"n must be a positive power of 2, got {n}")
 
@@ -179,8 +175,6 @@ def sample(
         raise ValueError(f"offset must be a power of 2, got {offset}")
 
     names = [d.name for d in dimensions]
-    if len(names) != len(set(names)):
-        raise ValueError(f"Duplicate dimension names: {names}")
 
     if where is None:
         # Simple path: generate exactly n points
