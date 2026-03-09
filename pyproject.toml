@@ -1,7 +1,7 @@
 [project]
 name = "sobol"
 version = "0.1.0"
-description = "Add your description here"
+description = "Sobol sequence sampling for experiment design and hyperparameter search"
 readme = "README.md"
 authors = [
     { name = "Claude", email = "noreply@anthropic.com" }
