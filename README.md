@@ -1,4 +1,4 @@
-# sobol
+# qsweep
 
 A Python library for generating quasi-random Sobol sequences for experiment design and hyperparameter search.
 
@@ -9,21 +9,21 @@ Inspired by [*Critical Hyper-Parameters: No Random, No Cry*](https://arxiv.org/a
 ## Install
 
 ```bash
-uv add sobol
+uv add qsweep
 ```
 
 ## Quick start
 
 ```python
-import sobol
+import qsweep
 
 # Generate 16 experiment configurations
-df = sobol.sample(
+df = qsweep.sample(
     16,
-    learning_rate=sobol.log(1e-5, 1e-1),
-    dropout=sobol.uniform(0.0, 0.5),
-    optimizer=sobol.choice({"adam": 3, "sgd": 1}),
-    batch_size=sobol.choice([32, 64, 128, 256]),
+    learning_rate=qsweep.log(1e-5, 1e-1),
+    dropout=qsweep.uniform(0.0, 0.5),
+    optimizer=qsweep.choice({"adam": 3, "sgd": 1}),
+    batch_size=qsweep.choice([32, 64, 128, 256]),
 )
 print(df)
 ```
@@ -32,29 +32,29 @@ print(df)
 
 | Constructor | Description | Example |
 |---|---|---|
-| `uniform(lower, upper)` | Uniform over `[lower, upper]` | `sobol.uniform(0, 1)` |
-| `log(lower, upper)` | Log-uniform over `[lower, upper]` (lower must be > 0) | `sobol.log(1e-5, 1e-1)` |
-| `normal(mean, std)` | Normal distribution via inverse CDF | `sobol.normal(0, 1)` |
-| `integer(lower, upper)` | Integers in `[lower, upper]` inclusive | `sobol.integer(1, 10)` |
-| `boolean()` | `True` or `False` | `sobol.boolean()` |
-| `choice(categories)` | Categorical; pass a list, set, or weighted dict | `sobol.choice(["a", "b"])` |
+| `uniform(lower, upper)` | Uniform over `[lower, upper]` | `qsweep.uniform(0, 1)` |
+| `log(lower, upper)` | Log-uniform over `[lower, upper]` (lower must be > 0) | `qsweep.log(1e-5, 1e-1)` |
+| `normal(mean, std)` | Normal distribution via inverse CDF | `qsweep.normal(0, 1)` |
+| `integer(lower, upper)` | Integers in `[lower, upper]` inclusive | `qsweep.integer(1, 10)` |
+| `boolean()` | `True` or `False` | `qsweep.boolean()` |
+| `choice(categories)` | Categorical; pass a list, set, or weighted dict | `qsweep.choice(["a", "b"])` |
 
 ### Weighted choices
 
 Pass a dict to assign relative weights:
 
 ```python
-sobol.choice({"adam": 3, "sgd": 1})  # adam sampled 3x more often
+qsweep.choice({"adam": 3, "sgd": 1})  # adam sampled 3x more often
 ```
 
 ## API
 
-### `sobol.sample(n, *, offset=0, where=None, **dimensions) -> pd.DataFrame`
+### `qsweep.sample(n, *, offset=0, where=None, **dimensions) -> pd.DataFrame`
 
 Generate `n` quasi-random samples. `n` must be a power of 2.
 
 ```python
-df = sobol.sample(64, x=sobol.uniform(0, 10), y=sobol.uniform(0, 10))
+df = qsweep.sample(64, x=qsweep.uniform(0, 10), y=qsweep.uniform(0, 10))
 ```
 
 **Parameters:**
@@ -63,23 +63,23 @@ df = sobol.sample(64, x=sobol.uniform(0, 10), y=sobol.uniform(0, 10))
 - `where` — A filter function `(row: pd.Series) -> bool`. Only rows where this returns `True` are kept. The sampler over-generates internally to fill the quota.
 - `**dimensions` — Keyword arguments mapping names to dimension specs.
 
-### `sobol.rows(n, *, offset=0, where=None, **dimensions) -> Generator[dict]`
+### `qsweep.rows(n, *, offset=0, where=None, **dimensions) -> Generator[dict]`
 
 Same as `sample()`, but yields one `dict` per row. Convenient for feeding configs into a training loop:
 
 ```python
-for config in sobol.rows(16, lr=sobol.log(1e-4, 1e-1), wd=sobol.log(1e-6, 1e-2)):
+for config in qsweep.rows(16, lr=qsweep.log(1e-4, 1e-1), wd=qsweep.log(1e-6, 1e-2)):
     train(lr=config["lr"], wd=config["wd"])
 ```
 
-### `sobol.grid(**dimensions) -> pd.DataFrame`
+### `qsweep.grid(**dimensions) -> pd.DataFrame`
 
 Full Cartesian product of discrete dimensions (`choice`, `integer`, `boolean`). Rejects continuous dimensions.
 
 ```python
-df = sobol.grid(
-    optimizer=sobol.choice(["adam", "sgd"]),
-    use_scheduler=sobol.boolean(),
+df = qsweep.grid(
+    optimizer=qsweep.choice(["adam", "sgd"]),
+    use_scheduler=qsweep.boolean(),
 )
 # Returns 4 rows: all combinations
 ```
@@ -89,8 +89,8 @@ df = sobol.grid(
 Run an initial 16-point experiment, then extend with 16 more points that continue the Sobol sequence:
 
 ```python
-batch_1 = sobol.sample(16, x=sobol.uniform(0, 1))
-batch_2 = sobol.sample(16, x=sobol.uniform(0, 1), offset=16)
+batch_1 = qsweep.sample(16, x=qsweep.uniform(0, 1))
+batch_2 = qsweep.sample(16, x=qsweep.uniform(0, 1), offset=16)
 ```
 
 The combined 32 points have the same low-discrepancy properties as generating 32 at once.
@@ -98,10 +98,10 @@ The combined 32 points have the same low-discrepancy properties as generating 32
 ## Filtering with `where`
 
 ```python
-df = sobol.sample(
+df = qsweep.sample(
     32,
-    x=sobol.uniform(0, 10),
-    y=sobol.uniform(0, 10),
+    x=qsweep.uniform(0, 10),
+    y=qsweep.uniform(0, 10),
     where=lambda row: row["x"] + row["y"] < 15,
 )
 # All 32 rows satisfy x + y < 15

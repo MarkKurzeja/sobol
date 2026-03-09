@@ -1,4 +1,4 @@
-"""Sobol sequence sampling for experiment design."""
+"""Quasi-random Sobol sequence sampling for experiment design."""
 
 from __future__ import annotations
 
